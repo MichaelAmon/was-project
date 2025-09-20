@@ -1,7 +1,8 @@
     
      // Load tools – like getting ingredients for a recipe
      const express = require('express'); // Handles WhatsApp messages
-     const { GoogleSpreadsheet } = require('google-spreadsheet'); // Connects to sheets
+     //const { GoogleSpreadsheet } = require('google-spreadsheet'); // Connects to sheets
+    const { GoogleSpreadsheet } = await import('google-spreadsheet');
      const { JWT } = require('google-auth-library'); // Logs into Google
      const axios = require('axios'); // Sends WhatsApp replies
      require('dotenv').config(); // Loads .env secrets
