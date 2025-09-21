@@ -15,5 +15,6 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "google-spreadsheet": "^5.0.2" // Fixed ky ES module compatibility issues
+    "google-auth-library": "^9.7.0"
   }
 }
