@@ -1,9 +1,15 @@
      // Load tools – like getting ingredients for a recipe
-     const express = require('express'); // Handles WhatsApp messages
-     const { GoogleSpreadsheet } = require('google-spreadsheet'); // Connects to sheets
-     const { JWT } = require('google-auth-library'); // Logs into Google
-     const axios = require('axios'); // Sends WhatsApp replies
-     require('dotenv').config(); // Loads .env secrets
+                   // const express = require('express'); // Handles WhatsApp messages
+                   // const { GoogleSpreadsheet } = require('google-spreadsheet'); // Connects to sheets
+                   // const { JWT } = require('google-auth-library'); // Logs into Google
+                   // const axios = require('axios'); // Sends WhatsApp replies
+                   // require('dotenv').config(); // Loads .env secrets
+
+     import express from 'express';
+     import { GoogleSpreadsheet } from 'google-spreadsheet';
+     import { JWT } from 'google-auth-library';
+     import axios from 'axios';
+     import 'dotenv/config';  // ← Different syntax for dotenv
 
      // Create app – like starting a machine
      const app = express();
@@ -179,5 +185,6 @@
      // Start app on VPS
      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
     
+
 
 
