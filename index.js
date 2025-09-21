@@ -1,11 +1,4 @@
-process.on("uncaughtException", err => {
-  console.error("Uncaught Exception:", err);
-});
 
-process.on("unhandledRejection", err => {
-  console.error("Unhandled Rejection:", err);
-});
-    
      // Load tools – like getting ingredients for a recipe
      const express = require('express'); // Handles WhatsApp messages
      //const { GoogleSpreadsheet } = require('google-spreadsheet'); // Connects to sheets
@@ -13,7 +6,7 @@ process.on("unhandledRejection", err => {
   const { GoogleSpreadsheet } = await import('google-spreadsheet');
   global.GoogleSpreadsheet = GoogleSpreadsheet;
   // Now start your server
-  require('./server'); // or whatever starts your Express app
+ // require('./server'); // or whatever starts your Express app
 })();
      const { JWT } = require('google-auth-library'); // Logs into Google
      const axios = require('axios'); // Sends WhatsApp replies
@@ -179,7 +172,4 @@ process.on("unhandledRejection", err => {
 
      // Start app on VPS
      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-        app.listen(process.env.PORT || 3000)
-      //  app.listen(port, '0.0.0.0', () => {
-       //   console.log(`Server running on port ${port}`);
-});
+    
