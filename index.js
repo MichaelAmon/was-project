@@ -181,18 +181,20 @@
          headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
        });
      }
-     // Health check endpoint for Coolify
+    // Health check endpoint (add if missing)
      app.get('/health', (req, res) => {
        res.status(200).json({ 
-         status: 'healthy', 
-         service: 'attendance-app',
-         version: '1.0.1'
-       });
-     });
+    status: 'healthy', 
+    service: 'attendance-app',
+    timestamp: new Date().toISOString()
+  });
+});
 
-     // Start app on VPS
-     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-    
+// Fixed server binding
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
+});
+
 
 
 
