@@ -1,3 +1,10 @@
+process.on("uncaughtException", err => {
+  console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", err => {
+  console.error("Unhandled Rejection:", err);
+});
     
      // Load tools – like getting ingredients for a recipe
      const express = require('express'); // Handles WhatsApp messages
