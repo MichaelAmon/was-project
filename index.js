@@ -19,9 +19,6 @@
      // Set port – where app listens on VPS
      const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
-  res.send('App is running!');
-});
 
      // Get secrets from .env
      const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
