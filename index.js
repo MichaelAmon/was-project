@@ -25,7 +25,7 @@
 
      // Office locations – replace with yours from Step 2
      const OFFICE_LOCATIONS = [
-       { name: 'Head_Office', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.5 }, // REPLACE
+       { name: 'Main', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.5 }, // REPLACE
        { name: 'Nyankpala', lat: 9.404691157748209, long: -0.9838639320946208, radius: 0.5 }  // REPLACE
      ];
 
@@ -205,6 +205,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
