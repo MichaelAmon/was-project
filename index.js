@@ -56,13 +56,17 @@
      }
 
      // Connect to Google
-     const serviceAccountAuth = new JWT({
-       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-       key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          //key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\\\n/g, '\n'),
-       scopes: ['https://www.googleapis.com/auth/spreadsheets']
-     });
-
+    // NEW: Handle both double and single escaping
+          const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+          const processedKey = rawKey
+            .replace(/\\\\n/g, '\n')  // First handle double-escaped \\n
+            .replace(/\\n/g, '\n');   // Then handle single-escaped \n
+          
+          const serviceAccountAuth = new JWT({
+            email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            key: processedKey,        // ← Use processed key
+            scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
      // Verify WhatsApp webhook
      app.get('/webhook', (req, res) => {
        if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === VERIFY_TOKEN) {
@@ -195,6 +199,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
