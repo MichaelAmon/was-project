@@ -86,18 +86,28 @@
             console.log(`📱 Message from: +${from}`);
 
          // Check Staff sheet (UPDATED: Use one doc if IDs match, with titles)
-         const staffDoc = new GoogleSpreadsheet(process.env.STAFF_SHEET_ID, serviceAccountAuth);
-         await staffDoc.loadInfo();
-         const staffSheet = staffDoc.sheetsByTitle['Staff Sheet']; // Use title instead of index
-         const staffRows = await staffSheet.getRows();
-         const user = staffRows.find(row => row.get('Phone') === `+${from}`);
+        // WRAPPED USER LOOKUP WITH TRY-CATCH
+         let user = null;
+         try {
+           console.log('🔍 Looking up user:', `+${from}`);
+           const staffDoc = new GoogleSpreadsheet(process.env.STAFF_SHEET_ID, serviceAccountAuth);
+           await staffDoc.loadInfo();
+           const staffSheet = staffDoc.sheetsByTitle['Staff Sheet'];
+           const staffRows = await staffSheet.getRows();
+           console.log('✅ Found', staffRows.length, 'staff rows');
+           user = staffRows.find(row => row.get('Phone') === `+${from}`);
+           console.log('👤 User found:', user ? user.get('Name') : 'NOT FOUND');
+    } catch (error) {
+           console.error('❌ Staff sheet error:', error.message);
+           await sendMessage(from, 'System error. Please try again or contact admin.');
+           return res.sendStatus(500);
+    }
 
          if (!user) {
-              console.log('❌ User not found');
-           await sendMessage(from, 'Unauthorized user.');
+           console.log('❌ Unauthorized user:', `+${from}`);
+           await sendMessage(from, 'Unauthorized user. Please contact admin to add your number.');
            return res.sendStatus(200);
-              console.log('✅ User found:', user.get('Name'));
-         }
+    }
 
          if (message.type === 'text') {
            const text = message.text.body.toLowerCase();
@@ -205,6 +215,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
