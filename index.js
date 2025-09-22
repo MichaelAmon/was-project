@@ -82,7 +82,7 @@
          // Check Staff sheet (UPDATED: Use one doc if IDs match, with titles)
          const staffDoc = new GoogleSpreadsheet(process.env.STAFF_SHEET_ID, serviceAccountAuth);
          await staffDoc.loadInfo();
-         const staffSheet = staffDoc.sheetsByTitle['Staff']; // Use title instead of index
+         const staffSheet = staffDoc.sheetsByTitle['Staff Sheet']; // Use title instead of index
          const staffRows = await staffSheet.getRows();
          const user = staffRows.find(row => row.get('Phone') === `+${from}`);
 
@@ -129,7 +129,7 @@
            const timestamp = new Date().toISOString();
            const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
            await attendanceDoc.loadInfo();
-           const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance']; // Use title instead of index
+           const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet']; // Use title instead of index
            const dateStr = timestamp.split('T')[0];
            const rows = await attendanceSheet.getRows();
            let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
@@ -195,6 +195,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
