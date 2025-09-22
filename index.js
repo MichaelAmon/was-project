@@ -59,7 +59,7 @@
      const serviceAccountAuth = new JWT({
        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
        //key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\\\n/g, '\n'),
+          //key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\\\n/g, '\n'),
        scopes: ['https://www.googleapis.com/auth/spreadsheets']
      });
 
@@ -195,6 +195,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
