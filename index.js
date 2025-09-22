@@ -78,10 +78,12 @@
 
      // Handle WhatsApp messages
      app.post('/webhook', async (req, res) => {
+          console.log('📨 Webhook received:', JSON.stringify(req.body, null, 2));
        const body = req.body;
        if (body.object && body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages && body.entry[0].changes[0].value.messages[0]) {
          const message = body.entry[0].changes[0].value.messages[0];
          const from = message.from;
+            console.log(`📱 Message from: +${from}`);
 
          // Check Staff sheet (UPDATED: Use one doc if IDs match, with titles)
          const staffDoc = new GoogleSpreadsheet(process.env.STAFF_SHEET_ID, serviceAccountAuth);
@@ -91,8 +93,10 @@
          const user = staffRows.find(row => row.get('Phone') === `+${from}`);
 
          if (!user) {
+              console.log('❌ User not found');
            await sendMessage(from, 'Unauthorized user.');
            return res.sendStatus(200);
+              console.log('✅ User found:', user.get('Name'));
          }
 
          if (message.type === 'text') {
@@ -108,12 +112,14 @@
                allowedLocations: allowedLocations  // NEW: Store for location check
              });
              await sendMessage(from, `Please share your location to confirm ${text}.`);
+                console.log(`📤 Sent location request to +${from}`);
            }
          } else if (message.type === 'location') {
            const { latitude, longitude } = message.location;
            const officeName = getOfficeName(latitude, longitude);
            if (!officeName) {
              await sendMessage(from, 'Location not at any office. Try again.');
+                console.log('✅ Webhook processed');
              return res.sendStatus(200);
            }
 
@@ -199,6 +205,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
