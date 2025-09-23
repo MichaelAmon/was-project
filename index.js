@@ -3,7 +3,9 @@ import express from 'express';
 import axios from 'axios';
 import { config } from 'dotenv';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
-import serviceAccountAuth from './serviceAccountKey.json' assert { type: 'json' };
+
+// Parse the secret into a JSON object
+const serviceAccountAuth = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error.message, error.stack);
@@ -55,13 +57,13 @@ const sendMessage = async (to, text) => {
 };
 
 const getOfficeName = (latitude, longitude) => {
-  // Simplified logic - replace with your actual geofencing
+  // Define offices with specific radii (in degrees)
   const offices = {
-    'Main': { lat: 9.3509, lon: -0.8125 }, // Example coords for Nyankpala
-    'Nyankpala': { lat: 9.3509, lon: -0.8125 }
+    'Main': { lat: 9.3509, lon: -0.8125, radius: 0.5 }, // Example coords for Nyankpala with 0.5-degree radius
+    'Nyankpala': { lat: 9.4000, lon: -0.8000, radius: 0.3 } // Example coords with 0.3-degree radius
   };
-  for (let [name, { lat, lon }] of Object.entries(offices)) {
-    if (Math.abs(latitude - lat) < 0.1 && Math.abs(longitude - lon) < 0.1) {
+  for (let [name, { lat, lon, radius }] of Object.entries(offices)) {
+    if (Math.abs(latitude - lat) < radius && Math.abs(longitude - lon) < radius) {
       return name;
     }
   }
