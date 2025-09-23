@@ -2,10 +2,6 @@ import process from 'node:process';
 import express from 'express';
 import axios from 'axios';
 import { config } from 'dotenv';
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-
-// Parse the secret into a JSON object
-const serviceAccountAuth = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error.message, error.stack);
@@ -20,14 +16,13 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log('🚀 App starting...');
 console.log('🛠️ Env vars:', {
   WHATSAPP_TOKEN: process.env.WHATSAPP_TOKEN ? 'SET' : 'MISSING',
-  PHONE_NUMBER_ID: process.env.PHONE_NUMBER_ID ? 'SET' : 'MISSING',
-  STAFF_SHEET_ID: process.env.STAFF_SHEET_ID ? 'SET' : 'MISSING',
-  ATTENDANCE_SHEET_ID: process.env.ATTENDANCE_SHEET_ID ? 'SET' : 'MISSING'
+  PHONE_NUMBER_ID: process.env.PHONE_NUMBER_ID ? 'SET' : 'MISSING'
 });
 
 config(); // Load .env
 const app = express();
 const userStates = new Map();
+const attendanceRecords = new Map(); // In-memory storage for attendance
 
 app.use(express.json({ limit: '10mb' })); // Handle large payloads
 
@@ -79,21 +74,12 @@ app.post('/webhook', async (req, res) => {
       const from = message.from;
       console.log(`📱 Message from: +${from}, Type: ${message.type}, Body: ${message.text?.body || 'N/A'}`);
 
-      let user = null;
-      try {
-        console.log('🔍 Looking up user:', `+${from}`);
-        const staffDoc = new GoogleSpreadsheet(process.env.STAFF_SHEET_ID, serviceAccountAuth);
-        await staffDoc.loadInfo();
-        const staffSheet = staffDoc.sheetsByTitle['Staff Sheet'];
-        const staffRows = await staffSheet.getRows();
-        console.log('✅ Found', staffRows.length, 'staff rows');
-        user = staffRows.find(row => row.get('Phone') === `+${from}`);
-        console.log('👤 User found:', user ? user.get('Name') : 'NOT FOUND');
-      } catch (error) {
-        console.error('❌ Staff sheet error:', error.message);
-        await sendMessage(from, 'System error. Please try again or contact admin.');
-        return res.sendStatus(500);
-      }
+      // Simple in-memory user check (replace with your own logic if needed)
+      const users = new Map([
+        ['+233247877745', { name: 'User1', allowedLocations: ['Main', 'Nyankpala'] }],
+        // Add more users as needed
+      ]);
+      const user = users.get(`+${from}`);
 
       if (!user) {
         console.log('❌ Unauthorized user:', `+${from}`);
@@ -105,15 +91,8 @@ app.post('/webhook', async (req, res) => {
         const text = message.text.body.toLowerCase();
         console.log('📝 Received text:', text);
         if (text === 'clock in' || text === 'clock out') {
-          const allowedLocationsStr = user.get('Allowed Locations') || '';
-          const allowedLocations = allowedLocationsStr.split(',').map(s => s.trim()).filter(s => s);
-          userStates.set(from, { 
-            action: text, 
-            name: user.get('Name'), 
-            department: user.get('Department'),
-            allowedLocations: allowedLocations
-          });
-          console.log('👤 User:', user ? user.get('Name') : 'NULL');
+          userStates.set(from, { action: text, name: user.name, allowedLocations: user.allowedLocations });
+          console.log('👤 User:', user.name);
           await sendMessage(from, `Please share your location to confirm ${text}.`);
           console.log(`📤 Sent location request to +${from}`);
         }
@@ -133,7 +112,7 @@ app.post('/webhook', async (req, res) => {
           return res.sendStatus(200);
         }
 
-        if (userState.allowedLocations.length === 0 || !userState.allowedLocations.includes(officeName)) {
+        if (!userState.allowedLocations.includes(officeName)) {
           await sendMessage(from, 'Not authorized at this location.');
           userStates.delete(from);
           console.log('❌ Unauthorized location');
@@ -141,48 +120,39 @@ app.post('/webhook', async (req, res) => {
         }
 
         const timestamp = new Date().toISOString();
-        const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
-        await attendanceDoc.loadInfo();
-        const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet'];
-        const rows = await attendanceSheet.getRows();
-        let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(timestamp.split('T')[0]));
+        const record = attendanceRecords.get(from) || { timeIn: null, timeOut: null, location: null };
+        let messageText = '';
 
         try {
           if (userState.action === 'clock in') {
-            if (userRow && userRow.get('Time In')) {
+            if (record.timeIn) {
               console.log('❌ Duplicate clock-in for:', from);
               await sendMessage(from, 'You already clocked in today.');
             } else {
-              console.log('✅ Creating new clock-in for:', userState.name);
-              await attendanceSheet.addRow({
-                Name: userState.name,
-                Phone: `+${from}`,
-                'Time In': timestamp,
-                'Time Out': '',
-                Location: officeName,
-                Department: userState.department
-              });
-              console.log('✅ Row added to Attendance Sheet');
-              console.log(`📤 Sending clock-in confirmation to ${from}`);
-              await sendMessage(from, `Clocked in successfully at ${timestamp} at ${officeName}.`);
-              console.log('✅ Clock-in message sent');
+              console.log('✅ Clocking in for:', userState.name);
+              record.timeIn = timestamp;
+              record.location = officeName;
+              attendanceRecords.set(from, record);
+              messageText = `Clocked in successfully at ${timestamp} at ${officeName}.`;
+              console.log('✅ Clock-in recorded');
+              await sendMessage(from, messageText);
+              console.log(`📤 Sent clock-in confirmation to ${from}`);
             }
           } else if (userState.action === 'clock out') {
-            if (!userRow || !userRow.get('Time In')) {
+            if (!record.timeIn) {
               console.log('❌ No clock-in found for clock-out:', from);
               await sendMessage(from, 'No clock-in record found for today.');
-            } else if (userRow.get('Time Out')) {
+            } else if (record.timeOut) {
               console.log('❌ Already clocked out today:', from);
               await sendMessage(from, 'You already clocked out today.');
             } else {
-              console.log('✅ Updating clock-out for:', userState.name);
-              userRow.set('Time Out', timestamp);
-              userRow.set('Location', officeName);
-              await userRow.save();
-              console.log('✅ Row updated with Time Out');
-              console.log(`📤 Sending clock-out confirmation to ${from}`);
-              await sendMessage(from, `Clocked out successfully at ${timestamp} at ${officeName}.`);
-              console.log('✅ Clock-out message sent');
+              console.log('✅ Clocking out for:', userState.name);
+              record.timeOut = timestamp;
+              attendanceRecords.set(from, record);
+              messageText = `Clocked out successfully at ${timestamp} at ${officeName}.`;
+              console.log('✅ Clock-out recorded');
+              await sendMessage(from, messageText);
+              console.log(`📤 Sent clock-out confirmation to ${from}`);
             }
           }
         } catch (error) {
