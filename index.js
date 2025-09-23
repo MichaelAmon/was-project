@@ -1,3 +1,10 @@
+import process from 'node:process';
+import express from 'express';
+import axios from 'axios';
+import { config } from 'dotenv';
+import { GoogleSpreadsheet } from 'google-spreadsheet';
+import serviceAccountAuth from './serviceAccountKey.json' assert { type: 'json' };
+
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error.message, error.stack);
   process.exit(1);
@@ -16,13 +23,8 @@ console.log('🛠️ Env vars:', {
   ATTENDANCE_SHEET_ID: process.env.ATTENDANCE_SHEET_ID ? 'SET' : 'MISSING'
 });
 
-const express = require('express');
+config(); // Load .env
 const app = express();
-const axios = require('axios');
-require('dotenv').config();
-const { GoogleSpreadsheet } = require('google-spreadsheet');
-const serviceAccountAuth = require('./serviceAccountKey.json');
-
 const userStates = new Map();
 
 app.use(express.json({ limit: '10mb' })); // Handle large payloads
