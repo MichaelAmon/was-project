@@ -154,33 +154,45 @@
            const rows = await attendanceSheet.getRows();
            let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
 
-           if (userState.action === 'clock in') {
-             if (userRow && userRow.get('Time In')) {
-               await sendMessage(from, 'You already clocked in today.');
-             } else {
-               await attendanceSheet.addRow({
-                 Name: userState.name,
-                 Phone: `+${from}`,
-                 'Time In': timestamp,
-                 'Time Out': '',
-                 Location: officeName,
-                 Department: userState.department
-               });
-               await sendMessage(from, `Clocked in successfully at ${timestamp} at ${officeName}.`);
+          if (userState.action === 'clock in') {
+            if (userRow && userRow.get('Time In')) {
+              console.log('❌ Duplicate clock-in for:', from);
+              await sendMessage(from, 'You already clocked in today.');
+            } else {
+              console.log('✅ Creating new clock-in for:', userState.name);
+              await attendanceSheet.addRow({
+                Name: userState.name,
+                Phone: `+${from}`,
+                'Time In': timestamp,
+                'Time Out': '',
+                Location: officeName,
+                Department: userState.department
+              });
+              console.log('✅ Row added to Attendance Sheet');
+              console.log(`📤 Sending clock-in confirmation to ${from}`);
+              await sendMessage(from, `Clocked in successfully at ${timestamp} at ${officeName}.`);
+              console.log('✅ Clock-in message sent');
+  }
+}
              }
-           } else if (userState.action === 'clock out') {
-             if (!userRow || !userRow.get('Time In')) {
-               await sendMessage(from, 'No clock-in record found for today.');
-             } else if (userRow.get('Time Out')) {
-               await sendMessage(from, 'You already clocked out today.');
-             } else {
-               userRow.set('Time Out', timestamp);
-               userRow.set('Location', officeName);
-               await userRow.save();
-               await sendMessage(from, `Clocked out successfully at ${timestamp} at ${officeName}.`);
-             }
-           }
-
+         } else if (userState.action === 'clock out') {
+            if (!userRow || !userRow.get('Time In')) {
+              console.log('❌ No clock-in found for clock-out:', from);
+              await sendMessage(from, 'No clock-in record found for today.');
+            } else if (userRow.get('Time Out')) {
+              console.log('❌ Already clocked out today:', from);
+              await sendMessage(from, 'You already clocked out today.');
+            } else {
+              console.log('✅ Updating clock-out for:', userState.name);
+              userRow.set('Time Out', timestamp);
+              userRow.set('Location', officeName);
+              await userRow.save();
+              console.log('✅ Row updated with Time Out');
+              console.log(`📤 Sending clock-out confirmation to ${from}`);
+              await sendMessage(from, `Clocked out successfully at ${timestamp} at ${officeName}.`);
+              console.log('✅ Clock-out message sent');
+  }
+}
            userStates.delete(from);
          }
          res.sendStatus(200);
@@ -190,27 +202,29 @@
      });
 
      // Send WhatsApp reply
-         async function sendMessage(to, text) {
-       console.log(`📤 Attempting to send to ${to}: "${text.substring(0, 50)}..."`);
-       const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
-       const data = {
-         messaging_product: 'whatsapp',
-         to: to,
-         type: 'text',
-         text: { body: text }
-       };
-       try {
-         const response = await axios.post(url, data, {
-           headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
-         });
-         console.log(`✅ Message sent to ${to}: ${response.status}`);
-       } catch (error) {
-         console.error(`❌ Message failed to ${to}:`);
-         console.error('  Status:', error.response?.status);
-         console.error('  Message:', error.message);
-         if (error.response?.data) {
-           console.error('  Details:', JSON.stringify(error.response.data, null, 2));
-    }
+             async function sendMessage(to, text) {
+            console.log(`📤 Sending to ${to}: "${text.substring(0, 50)}..."`);
+            const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+            const data = {
+              messaging_product: 'whatsapp',
+              to: to,
+              type: 'text',
+              text: { body: text }
+            };
+            try {
+              const response = await axios.post(url, data, {
+                headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+              });
+              console.log(`✅ Message sent to ${to}: ${response.status}`);
+              return response;
+            } catch (error) {
+              console.error(`❌ Message FAILED to ${to}:`);
+              console.error('  Status:', error.response?.status);
+              console.error('  Error:', error.message);
+              if (error.response?.data) {
+                console.error('  Details:', JSON.stringify(error.response.data, null, 2));
+         }
+         // Don't throw—let the app continue
   }
 }
     // Health check endpoint (add if missing)
@@ -226,6 +240,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
