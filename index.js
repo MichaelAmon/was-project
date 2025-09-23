@@ -174,8 +174,8 @@
               console.log('✅ Clock-in message sent');
   }
 }
-             }
-         } else if (userState.action === 'clock out') {
+             
+              else if (userState.action === 'clock out') {
             if (!userRow || !userRow.get('Time In')) {
               console.log('❌ No clock-in found for clock-out:', from);
               await sendMessage(from, 'No clock-in record found for today.');
@@ -240,6 +240,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
