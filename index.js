@@ -124,77 +124,81 @@
              await sendMessage(from, `Please share your location to confirm ${text}.`);
                 console.log(`📤 Sent location request to +${from}`);
            }
-         } else if (message.type === 'location') {
-           const { latitude, longitude } = message.location;
-           const officeName = getOfficeName(latitude, longitude);
-           if (!officeName) {
-             await sendMessage(from, 'Location not at any office. Try again.');
-                console.log('✅ Webhook processed');
-             return res.sendStatus(200);
-           }
-
-           const userState = userStates.get(from);
-           if (!userState) {
-             await sendMessage(from, 'Please send "clock in" or "clock out" first.');
-             return res.sendStatus(200);
-           }
-
-           // NEW: Check if office is allowed for this user
-           if (userState.allowedLocations.length === 0 || !userState.allowedLocations.includes(officeName)) {
-             await sendMessage(from, 'Not authorized at this location.');
-             userStates.delete(from);
-             return res.sendStatus(200);
-           }
-
-           const timestamp = new Date().toISOString();
-           const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
-           await attendanceDoc.loadInfo();
-           const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet']; // Use title instead of index
-           const dateStr = timestamp.split('T')[0];
-           const rows = await attendanceSheet.getRows();
-           let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
-
-          if (userState.action === 'clock in') {
-            if (userRow && userRow.get('Time In')) {
-              console.log('❌ Duplicate clock-in for:', from);
-              await sendMessage(from, 'You already clocked in today.');
-            } else {
-              console.log('✅ Creating new clock-in for:', userState.name);
-              await attendanceSheet.addRow({
-                Name: userState.name,
-                Phone: `+${from}`,
-                'Time In': timestamp,
-                'Time Out': '',
-                Location: officeName,
-                Department: userState.department
-              });
-              console.log('✅ Row added to Attendance Sheet');
-              console.log(`📤 Sending clock-in confirmation to ${from}`);
-              await sendMessage(from, `Clocked in successfully at ${timestamp} at ${officeName}.`);
-              console.log('✅ Clock-in message sent');
+     } else if (message.type === 'location') {
+  const { latitude, longitude } = message.location;
+  const officeName = getOfficeName(latitude, longitude);
+  if (!officeName) {
+    await sendMessage(from, 'Location not at any office. Try again.');
+    console.log('❌ Location not matched');
+    return res.sendStatus(200);
   }
-}
-             
-              else if (userState.action === 'clock out') {
-            if (!userRow || !userRow.get('Time In')) {
-              console.log('❌ No clock-in found for clock-out:', from);
-              await sendMessage(from, 'No clock-in record found for today.');
-            } else if (userRow.get('Time Out')) {
-              console.log('❌ Already clocked out today:', from);
-              await sendMessage(from, 'You already clocked out today.');
-            } else {
-              console.log('✅ Updating clock-out for:', userState.name);
-              userRow.set('Time Out', timestamp);
-              userRow.set('Location', officeName);
-              await userRow.save();
-              console.log('✅ Row updated with Time Out');
-              console.log(`📤 Sending clock-out confirmation to ${from}`);
-              await sendMessage(from, `Clocked out successfully at ${timestamp} at ${officeName}.`);
-              console.log('✅ Clock-out message sent');
+
+  const userState = userStates.get(from);
+  if (!userState) {
+    await sendMessage(from, 'Please send "clock in" or "clock out" first.');
+    console.log('❌ No user state found');
+    return res.sendStatus(200);
   }
+
+  // NEW: Check if office is allowed for this user
+  if (userState.allowedLocations.length === 0 || !userState.allowedLocations.includes(officeName)) {
+    await sendMessage(from, 'Not authorized at this location.');
+    userStates.delete(from);
+    console.log('❌ Unauthorized location');
+    return res.sendStatus(200);
+  }
+
+  const timestamp = new Date().toISOString();
+  const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
+  await attendanceDoc.loadInfo();
+  const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet'];
+  const rows = await attendanceSheet.getRows();
+  let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(timestamp.split('T')[0]));
+
+  try {
+    if (userState.action === 'clock in') {
+      if (userRow && userRow.get('Time In')) {
+        console.log('❌ Duplicate clock-in for:', from);
+        await sendMessage(from, 'You already clocked in today.');
+      } else {
+        console.log('✅ Creating new clock-in for:', userState.name);
+        await attendanceSheet.addRow({
+          Name: userState.name,
+          Phone: `+${from}`,
+          'Time In': timestamp,
+          'Time Out': '',
+          Location: officeName,
+          Department: userState.department
+        });
+        console.log('✅ Row added to Attendance Sheet');
+        console.log(`📤 Sending clock-in confirmation to ${from}`);
+        await sendMessage(from, `Clocked in successfully at ${timestamp} at ${officeName}.`);
+        console.log('✅ Clock-in message sent');
+      }
+    } else if (userState.action === 'clock out') { // Same level as clock in
+      if (!userRow || !userRow.get('Time In')) {
+        console.log('❌ No clock-in found for clock-out:', from);
+        await sendMessage(from, 'No clock-in record found for today.');
+      } else if (userRow.get('Time Out')) {
+        console.log('❌ Already clocked out today:', from);
+        await sendMessage(from, 'You already clocked out today.');
+      } else {
+        console.log('✅ Updating clock-out for:', userState.name);
+        userRow.set('Time Out', timestamp);
+        userRow.set('Location', officeName);
+        await userRow.save();
+        console.log('✅ Row updated with Time Out');
+        console.log(`📤 Sending clock-out confirmation to ${from}`);
+        await sendMessage(from, `Clocked out successfully at ${timestamp} at ${officeName}.`);
+        console.log('✅ Clock-out message sent');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Clock action failed:', error.message);
+  }
+
+  userStates.delete(from);
 }
-           userStates.delete(from);
-         }
          res.sendStatus(200);
        } else {
          res.sendStatus(404);
@@ -240,6 +244,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
