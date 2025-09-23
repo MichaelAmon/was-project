@@ -190,7 +190,8 @@
      });
 
      // Send WhatsApp reply
-     async function sendMessage(to, text) {
+         async function sendMessage(to, text) {
+       console.log(`📤 Attempting to send to ${to}: "${text.substring(0, 50)}..."`);
        const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
        const data = {
          messaging_product: 'whatsapp',
@@ -198,10 +199,20 @@
          type: 'text',
          text: { body: text }
        };
-       await axios.post(url, data, {
-         headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
-       });
-     }
+       try {
+         const response = await axios.post(url, data, {
+           headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+         });
+         console.log(`✅ Message sent to ${to}: ${response.status}`);
+       } catch (error) {
+         console.error(`❌ Message failed to ${to}:`);
+         console.error('  Status:', error.response?.status);
+         console.error('  Message:', error.message);
+         if (error.response?.data) {
+           console.error('  Details:', JSON.stringify(error.response.data, null, 2));
+    }
+  }
+}
     // Health check endpoint (add if missing)
      app.get('/health', (req, res) => {
        res.status(200).json({ 
@@ -215,6 +226,7 @@
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
 
 
 
