@@ -17,18 +17,18 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-// Office locations
+// Office locations for geofencing
 const OFFICE_LOCATIONS = [
-  { name: 'Main', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.5 },
-  { name: 'Nyankpala', lat: 9.404691157748209, long: -0.9838639320946208, radius: 0.5 }
+  { name: 'Main', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.1 },
+  { name: 'Nyankpala', lat: 9.404691157748209, long: -0.9838639320946208, radius: 0.1 }
 ];
 
-// Memory to track user actions
+// Memory to track user actions and location state
 const userStates = new Map();
 
 // Calculate distance between user and office
 function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth’s radius (km)
+  const R = 6371; // Earth's radius (km)
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -93,7 +93,7 @@ app.post('/webhook', async (req, res) => {
     } catch (error) {
       console.error('❌ Staff sheet error:', error.message);
       await sendMessage(from, 'System error. Please try again or contact admin.');
-      return res.sendStatus(500);
+      return res.sendStatus(200);
     }
 
     if (!user) {
@@ -112,87 +112,45 @@ app.post('/webhook', async (req, res) => {
           action: text, 
           name: user.get('Name'), 
           department: user.get('Department'),
-          allowedLocations: allowedLocations
+          allowedLocations: allowedLocations,
+          awaitingLocation: true,
+          requestTime: Date.now(),
+          expiryTime: Date.now() + 10000 // 10-second window
         });
         console.log('👤 User state set:', user.name, text);
-        await sendMessage(from, `Please share your location to confirm ${text}.`);
+        await sendLocationRequest(from, `Please share your current location to ${text}. Click the button below.`);
         console.log(`📤 Sent location request to +${from}`);
       }
     } else if (message.type === 'location') {
-      const { latitude, longitude } = message.location;
-      const officeName = getOfficeName(latitude, longitude);
-      if (!officeName) {
-        await sendMessage(from, 'Location not at any office. Try again.');
-        console.log('❌ Location not matched');
-        return res.sendStatus(200);
-      }
-
       const userState = userStates.get(from);
-      if (!userState) {
-        console.log('❌ No user state found, ignoring location');
-        return res.sendStatus(200);
-      }
+      if (userState && userState.awaitingLocation) {
+        const { latitude, longitude } = message.location;
+        console.log(`👀 Validating location: ${latitude}, ${longitude}`);
 
-      if (!userState.allowedLocations.includes(officeName)) {
-        await sendMessage(from, 'Not authorized at this location.');
-        userStates.delete(from);
-        console.log('❌ Unauthorized location');
-        return res.sendStatus(200);
-      }
-
-      const timestamp = new Date().toISOString();
-      const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
-      await attendanceDoc.loadInfo();
-      const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet'];
-      const dateStr = timestamp.split('T')[0];
-      const rows = await attendanceSheet.getRows();
-      let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
-
-      let responseMessage = '';
-      try {
-        if (userState.action === 'clock in') {
-          if (userRow && userRow.get('Time In')) {
-            console.log('❌ Duplicate clock-in for:', from);
-            responseMessage = 'You have already clocked in today.';
-          } else {
-            console.log('✅ Creating new clock-in for:', userState.name);
-            await attendanceSheet.addRow({
-              Name: userState.name,
-              Phone: `+${from}`,
-              'Time In': timestamp,
-              'Time Out': '',
-              Location: officeName,
-              Department: userState.department
-            });
-            console.log('✅ Row added to Attendance Sheet');
-            responseMessage = `Clocked in successfully at ${timestamp} at ${officeName}.`;
-          }
-        } else if (userState.action === 'clock out') {
-          if (!userRow || !userRow.get('Time In')) {
-            console.log('❌ No clock-in found for clock-out:', from);
-            responseMessage = 'No clock-in record found for today.';
-          } else if (userRow.get('Time Out')) {
-            console.log('❌ Already clocked out today:', from);
-            responseMessage = 'You have already clocked out today.';
-          } else {
-            console.log('✅ Updating clock-out for:', userState.name);
-            userRow.set('Time Out', timestamp);
-            userRow.set('Location', officeName);
-            await userRow.save();
-            console.log('✅ Row updated with Time Out');
-            responseMessage = `Clocked out successfully at ${timestamp} at ${officeName}.`;
-          }
+        // Check timestamp
+        if (Date.now() > userState.expiryTime) {
+          await sendMessage(from, 'Time out, you took too long. Please try again.');
+          userStates.delete(from);
+          return res.sendStatus(200);
         }
-      } catch (error) {
-        console.error('❌ Clock action failed:', error.message);
-        responseMessage = 'Error processing your request. Please try again.';
-      }
 
-      if (responseMessage) {
-        await sendMessage(from, responseMessage);
-        console.log(`📤 ${userState.action === 'clock in' ? 'Clock-in' : 'Clock-out'} response sent to +${from}`);
+        // Validate with geofencing
+        const officeName = getOfficeName(latitude, longitude);
+        if (!officeName) {
+          await sendMessage(from, 'Invalid location. Please try again from an office.');
+          return res.sendStatus(200);
+        }
+
+        if (!userState.allowedLocations.includes(officeName)) {
+          await sendMessage(from, 'Not authorized at this location. Please try again.');
+          userStates.delete(from);
+          return res.sendStatus(200);
+        }
+
+        // Process action if valid
+        await handleAction(from, userState, officeName);
+        userStates.delete(from);
       }
-      userStates.delete(from);
     }
     res.sendStatus(200);
   } else {
@@ -201,14 +159,107 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// Handle clock in/out action
+async function handleAction(from, userState, officeName) {
+  const timestamp = new Date().toISOString();
+  const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
+  await attendanceDoc.loadInfo();
+  const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet'];
+  const dateStr = timestamp.split('T')[0];
+  const rows = await attendanceSheet.getRows();
+  let userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
+
+  let responseMessage = '';
+  try {
+    if (userState.action === 'clock in') {
+      if (userRow && userRow.get('Time In')) {
+        console.log('❌ Duplicate clock-in for:', from);
+        responseMessage = 'You have already clocked in today.';
+      } else {
+        console.log('✅ Creating new clock-in for:', userState.name);
+        await attendanceSheet.addRow({
+          Name: userState.name,
+          Phone: `+${from}`,
+          'Time In': timestamp,
+          'Time Out': '',
+          Location: officeName,
+          Department: userState.department
+        });
+        console.log('✅ Row added to Attendance Sheet');
+        responseMessage = `Clocked in successfully at ${timestamp} at ${officeName}.`;
+      }
+    } else if (userState.action === 'clock out') {
+      if (!userRow || !userRow.get('Time In')) {
+        console.log('❌ No clock-in found for clock-out:', from);
+        responseMessage = 'No clock-in record found for today.';
+      } else if (userRow.get('Time Out')) {
+        console.log('❌ Already clocked out today:', from);
+        responseMessage = 'You have already clocked out today.';
+      } else {
+        console.log('✅ Updating clock-out for:', userState.name);
+        userRow.set('Time Out', timestamp);
+        userRow.set('Location', officeName);
+        await userRow.save();
+        console.log('✅ Row updated with Time Out');
+        responseMessage = `Clocked out successfully at ${timestamp} at ${officeName}.`;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Clock action failed:', error.message);
+    responseMessage = 'Error processing your request. Please try again.';
+  }
+
+  if (responseMessage) {
+    await sendMessage(from, responseMessage);
+    console.log(`📤 ${userState.action === 'clock in' ? 'Clock-in' : 'Clock-out'} response sent to +${from}`);
+  }
+}
+
+// Send WhatsApp location request
+async function sendLocationRequest(to, text) {
+  console.log(`📤 Sending location request to ${to}: "${text.substring(0, 50)}..."`);
+  const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
+  const data = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: to,
+    type: "interactive",
+    interactive: {
+      type: "location_request_message",
+      body: {
+        text: text
+      },
+      action: {
+        button: "Send Location"
+      }
+    }
+  };
+  try {
+    const response = await axios.post(url, data, {
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+    });
+    console.log(`✅ Location request sent to ${to}: ${response.status}`);
+    return response;
+  } catch (error) {
+    console.error(`❌ Location request FAILED to ${to}:`);
+    console.error('  Status:', error.response?.status);
+    console.error('  Error:', error.message);
+    if (error.response?.data) {
+      console.error('  Details:', JSON.stringify(error.response.data, null, 2));
+    }
+    // Fallback to text prompt if interactive fails
+    await sendMessage(to, text + ' (Send your current location)');
+  }
+}
+
 // Send WhatsApp reply
 async function sendMessage(to, text) {
   console.log(`📤 Sending to ${to}: "${text.substring(0, 50)}..."`);
   const url = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
   const data = {
-    messaging_product: 'whatsapp',
+    messaging_product: "whatsapp",
     to: to,
-    type: 'text',
+    type: "text",
     text: { body: text }
   };
   try {
