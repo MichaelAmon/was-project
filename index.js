@@ -115,7 +115,7 @@ app.post('/webhook', async (req, res) => {
           allowedLocations: allowedLocations,
           awaitingLocation: true,
           requestTime: Date.now(),
-          expiryTime: Date.now() + 10000 // 10-second window
+          expiryTime: Date.now() + 20000 // 10-second window
         });
         console.log('👤 User state set:', user.name, text);
         await sendLocationRequest(from, `Please share your current location to ${text}. Click the button below.`);
@@ -129,7 +129,7 @@ app.post('/webhook', async (req, res) => {
 
         // Check timestamp
         if (Date.now() > userState.expiryTime) {
-          await sendMessage(from, 'Time out, you took too long. Please try again.');
+          await sendMessage(from, 'Timed out. Please try again.');
           userStates.delete(from);
           return res.sendStatus(200);
         }
@@ -291,3 +291,4 @@ app.get('/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
+
