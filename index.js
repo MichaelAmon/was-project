@@ -108,6 +108,31 @@ app.post('/webhook', async (req, res) => {
       if (text === 'clock in' || text === 'clock out') {
         const allowedLocationsStr = user.get('Allowed Locations') || '';
         const allowedLocations = allowedLocationsStr.split(',').map(s => s.trim()).filter(s => s);
+
+        // Check existing clock status
+        try {
+          const attendanceDoc = new GoogleSpreadsheet(process.env.ATTENDANCE_SHEET_ID, serviceAccountAuth);
+          await attendanceDoc.loadInfo();
+          const attendanceSheet = attendanceDoc.sheetsByTitle['Attendance Sheet'];
+          const dateStr = new Date().toISOString().split('T')[0];
+          const rows = await attendanceSheet.getRows();
+          const userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
+
+          if (text === 'clock in' && userRow && userRow.get('Time In')) {
+            await sendMessage(from, 'You have already clocked in today.');
+            return res.sendStatus(200);
+          }
+          if (text === 'clock out' && (!userRow || !userRow.get('Time In') || userRow.get('Time Out'))) {
+            await sendMessage(from, 'No clock-in found for today or already clocked out.');
+            return res.sendStatus(200);
+          }
+        } catch (error) {
+          console.error('❌ Attendance check failed:', error.message);
+          await sendMessage(from, 'Error checking your status. Please try again or contact admin.');
+          return res.sendStatus(200);
+        }
+
+        // Proceed with location request if no conflict
         userStates.set(from, { 
           action: text, 
           name: user.get('Name'), 
@@ -115,7 +140,7 @@ app.post('/webhook', async (req, res) => {
           allowedLocations: allowedLocations,
           awaitingLocation: true,
           requestTime: Date.now(),
-          expiryTime: Date.now() + 20000 // 10-second window
+          expiryTime: Date.now() + 10000 // 10-second window
         });
         console.log('👤 User state set:', user.name, text);
         await sendLocationRequest(from, `Please share your current location to ${text}. Click the button below.`);
@@ -129,7 +154,7 @@ app.post('/webhook', async (req, res) => {
 
         // Check timestamp
         if (Date.now() > userState.expiryTime) {
-          await sendMessage(from, 'Timed out. Please try again.');
+          await sendMessage(from, 'Time out, you took too long. Please try again.');
           userStates.delete(from);
           return res.sendStatus(200);
         }
@@ -191,7 +216,7 @@ async function handleAction(from, userState, officeName) {
     } else if (userState.action === 'clock out') {
       if (!userRow || !userRow.get('Time In')) {
         console.log('❌ No clock-in found for clock-out:', from);
-        responseMessage = 'No clock-in record found for today.';
+        responseMessage = 'No clock-in found for today.';
       } else if (userRow.get('Time Out')) {
         console.log('❌ Already clocked out today:', from);
         responseMessage = 'You have already clocked out today.';
@@ -291,4 +316,3 @@ app.get('/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🎉 Attendance app running on http://0.0.0.0:${PORT}`);
 });
-
