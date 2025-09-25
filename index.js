@@ -19,7 +19,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 // Office locations for geofencing
 const OFFICE_LOCATIONS = [
-  { name: 'Main', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.1 },
+  { name: 'Head Office', lat: 9.429241474535132, long: -1.0533786340817441, radius: 0.1 },
   { name: 'Nyankpala', lat: 9.404691157748209, long: -0.9838639320946208, radius: 0.1 }
 ];
 
@@ -92,13 +92,13 @@ app.post('/webhook', async (req, res) => {
       console.log('👤 User found:', user ? user.get('Name') : 'NOT FOUND');
     } catch (error) {
       console.error('❌ Staff sheet error:', error.message);
-      await sendMessage(from, 'System error. Please try again or contact admin.');
+      await sendMessage(from, 'System error 😞. Please try again or contact admin 📞.');
       return res.sendStatus(200);
     }
 
     if (!user) {
       console.log('❌ Unauthorized user:', `+${from}`);
-      await sendMessage(from, 'Unauthorized user. Please contact admin to add your number.');
+      await sendMessage(from, 'Unauthorized user 🚫. Please contact admin to add your number 📞.');
       return res.sendStatus(200);
     }
 
@@ -119,16 +119,16 @@ app.post('/webhook', async (req, res) => {
           const userRow = rows.find(row => row.get('Phone') === `+${from}` && row.get('Time In')?.startsWith(dateStr));
 
           if (text === 'clock in' && userRow && userRow.get('Time In')) {
-            await sendMessage(from, 'You have already clocked in today.');
+            await sendMessage(from, 'You have already clocked in today ✅.');
             return res.sendStatus(200);
           }
           if (text === 'clock out' && (!userRow || !userRow.get('Time In') || userRow.get('Time Out'))) {
-            await sendMessage(from, 'No clock-in found for today or already clocked out.');
+            await sendMessage(from, 'No clock-in found for today ⏰ or already clocked out ✅.');
             return res.sendStatus(200);
           }
         } catch (error) {
           console.error('❌ Attendance check failed:', error.message);
-          await sendMessage(from, 'Error checking your status. Please try again or contact admin.');
+          await sendMessage(from, 'Error checking your status 😞. Please try again or contact admin 📞.');
           return res.sendStatus(200);
         }
 
@@ -143,7 +143,7 @@ app.post('/webhook', async (req, res) => {
           expiryTime: Date.now() + 10000 // 10-second window
         });
         console.log('👤 User state set:', user.name, text);
-        await sendLocationRequest(from, `Please share your current location to ${text}. Click the button below.`);
+        await sendLocationRequest(from, `Please share your current location 📍 to ${text}. Click the button below 🎯!`);
         console.log(`📤 Sent location request to +${from}`);
       }
     } else if (message.type === 'location') {
@@ -154,7 +154,7 @@ app.post('/webhook', async (req, res) => {
 
         // Check timestamp
         if (Date.now() > userState.expiryTime) {
-          await sendMessage(from, 'Time out, you took too long. Please try again.');
+          await sendMessage(from, 'Time out ⏰, you took too long. Please try again 🔄.');
           userStates.delete(from);
           return res.sendStatus(200);
         }
@@ -162,12 +162,12 @@ app.post('/webhook', async (req, res) => {
         // Validate with geofencing
         const officeName = getOfficeName(latitude, longitude);
         if (!officeName) {
-          await sendMessage(from, 'Invalid location. Please try again from an office.');
+          await sendMessage(from, 'Invalid location 🚫. Please try again from an office 📍.');
           return res.sendStatus(200);
         }
 
         if (!userState.allowedLocations.includes(officeName)) {
-          await sendMessage(from, 'Not authorized at this location. Please try again.');
+          await sendMessage(from, 'Not authorized at this location 🚫. Please try again 📍.');
           userStates.delete(from);
           return res.sendStatus(200);
         }
@@ -199,7 +199,7 @@ async function handleAction(from, userState, officeName) {
     if (userState.action === 'clock in') {
       if (userRow && userRow.get('Time In')) {
         console.log('❌ Duplicate clock-in for:', from);
-        responseMessage = 'You have already clocked in today.';
+        responseMessage = 'You have already clocked in today ✅.';
       } else {
         console.log('✅ Creating new clock-in for:', userState.name);
         await attendanceSheet.addRow({
@@ -211,27 +211,27 @@ async function handleAction(from, userState, officeName) {
           Department: userState.department
         });
         console.log('✅ Row added to Attendance Sheet');
-        responseMessage = `Clocked in successfully at ${timestamp} at ${officeName}.`;
+        responseMessage = `Clocked in successfully 🎉 at ${timestamp} at ${officeName} 📍!`;
       }
     } else if (userState.action === 'clock out') {
       if (!userRow || !userRow.get('Time In')) {
         console.log('❌ No clock-in found for clock-out:', from);
-        responseMessage = 'No clock-in found for today.';
+        responseMessage = 'No clock-in found for today ⏰.';
       } else if (userRow.get('Time Out')) {
         console.log('❌ Already clocked out today:', from);
-        responseMessage = 'You have already clocked out today.';
+        responseMessage = 'You have already clocked out today ✅.';
       } else {
         console.log('✅ Updating clock-out for:', userState.name);
         userRow.set('Time Out', timestamp);
         userRow.set('Location', officeName);
         await userRow.save();
         console.log('✅ Row updated with Time Out');
-        responseMessage = `Clocked out successfully at ${timestamp} at ${officeName}.`;
+        responseMessage = `Clocked out successfully 🎉 at ${timestamp} at ${officeName} 📍!`;
       }
     }
   } catch (error) {
     console.error('❌ Clock action failed:', error.message);
-    responseMessage = 'Error processing your request. Please try again.';
+    responseMessage = 'Error processing your request 😞. Please try again 🔄.';
   }
 
   if (responseMessage) {
@@ -273,7 +273,7 @@ async function sendLocationRequest(to, text) {
       console.error('  Details:', JSON.stringify(error.response.data, null, 2));
     }
     // Fallback to text prompt if interactive fails
-    await sendMessage(to, text + ' (Send your current location)');
+    await sendMessage(to, text + ' (Send your current location 📍)');
   }
 }
 
